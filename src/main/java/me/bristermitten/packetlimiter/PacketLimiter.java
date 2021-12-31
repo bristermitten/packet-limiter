@@ -67,7 +67,7 @@ public final class PacketLimiter extends JavaPlugin {
                         }
                     }
                     if (i != 0) {
-                        getSLF4JLogger().info("Resent {} packets to {}", i, player.getName());
+                        debugLog("Resent {} packets to {}", i, player.getName());
                     }
                 }), 0L, 1L);
     }

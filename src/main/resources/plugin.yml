@@ -1,5 +1,5 @@
 name: PacketLimiter
 version: '${version}'
-main: net.developerden.packetlimiter.PacketLimiter
+main: me.bristermitten.packetlimiter.PacketLimiter
 api-version: 1.18
 depend: [ ProtocolLib ]

@@ -1,5 +1,6 @@
 # Controls how many chunk packets per tick a player can receive
 # Higher values mean chunks will load faster, but too high will cause lag again
+# In my testing, anything above 20-25 will start to cause ping problems on a ~70Mbps client
 max-packets-per-tick: 15
 
 # Enable debug messages, showing detail about the packets that are sent / limited

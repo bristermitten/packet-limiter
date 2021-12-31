@@ -1,5 +1,11 @@
-name: PacketLimiter
+name: PaperLagFix
 version: '${version}'
 main: me.bristermitten.packetlimiter.PacketLimiter
 api-version: 1.18
 depend: [ ProtocolLib ]
+commands:
+  paperlagreload:
+    aliases:
+      - plreload
+    description: Reload config for PaperLagFix
+    permission: paperlagfix.reload

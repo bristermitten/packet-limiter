@@ -1,0 +1,7 @@
+# Controls how many chunk packets per tick a player can receive
+# Higher values mean chunks will load faster, but too high will cause lag again
+max-packets-per-tick: 15
+
+# Enable debug messages, showing detail about the packets that are sent / limited
+# THIS WILL FLOOD YOUR CONSOLE!
+debug: false

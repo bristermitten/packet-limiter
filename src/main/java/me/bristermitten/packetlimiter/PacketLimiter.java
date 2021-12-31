@@ -11,22 +11,19 @@ import com.comphenix.protocol.events.PacketEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.util.Vector;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.NavigableSet;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class PacketLimiter extends JavaPlugin {
     private static final int DEFAULT_MAX_PACKETS = 15;
     private static final String DEBUG_PREFIX = "[Debug] ";
-    private final ConcurrentPlayerMap<NavigableSet<PacketContainer>> packetQueue =
+    private final ConcurrentPlayerMap<Queue<PacketContainer>> packetQueue =
             new ConcurrentPlayerMap<>(ConcurrentPlayerMap.PlayerKey.NAME);
-    private final ConcurrentPlayerMap<Set<PacketContainer>> packetsSentInTick = new ConcurrentPlayerMap<>(ConcurrentPlayerMap.PlayerKey.NAME);
+    private final ConcurrentPlayerMap<AtomicInteger> packetsSentInTick =
+            new ConcurrentPlayerMap<>(ConcurrentPlayerMap.PlayerKey.NAME);
 
     private void debugLog(String format, Object arg1, Object arg2) {
         if (getConfig().getBoolean("debug")) {
@@ -35,20 +32,12 @@ public final class PacketLimiter extends JavaPlugin {
         }
     }
 
-    private Set<PacketContainer> getPacketsSentInTick(Player player) {
-        return packetsSentInTick.computeIfAbsent(player, p -> ConcurrentHashMap.newKeySet());
+    private AtomicInteger getPacketsSentInTick(Player player) {
+        return packetsSentInTick.computeIfAbsent(player, p -> new AtomicInteger());
     }
 
-    private NavigableSet<PacketContainer> getPacketQueue(Player player) {
-        return packetQueue.computeIfAbsent(player, p -> new ConcurrentSkipListSet<>(
-                Comparator.comparingDouble(packet -> {
-                    var x = packet.getIntegers().read(0);
-                    var z = packet.getIntegers().read(1);
-                    var pX = player.getLocation().getChunk().getX();
-                    var pZ = player.getLocation().getChunk().getZ();
-                    return new Vector(x, 0, z).distanceSquared(new Vector(pX, 0, pZ));
-                })
-        ));
+    private Queue<PacketContainer> getPacketQueue(Player player) {
+        return packetQueue.computeIfAbsent(player, p -> new ConcurrentLinkedQueue<>());
     }
 
     @Override
@@ -58,42 +47,47 @@ public final class PacketLimiter extends JavaPlugin {
         getCommand("paperlagreload").setExecutor(new ReloadCommand(this));
 
         final ProtocolManager protocolManager = ProtocolLibrary.getProtocolManager();
+        registerPacketListener(protocolManager);
+
+        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () ->
+                packetQueue.forEach((player, queue) -> {
+                    getPacketsSentInTick(player).set(0); // Reset packet counter for this tick
+                    int i;
+                    // re-send no more than the maximum packets
+                    for (i = 0; i < getMaxPackets(); i++) {
+                        final var packet = queue.poll();
+                        if (packet == null) {
+                            break;
+                        }
+                        debugLog("Resending packet {} to player {}", player, packet);
+                        try {
+                            protocolManager.sendServerPacket(player, packet);
+                        } catch (InvocationTargetException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    if (i != 0) {
+                        getSLF4JLogger().info("Resent {} packets to {}", i, player.getName());
+                    }
+                }), 0L, 1L);
+    }
+
+    private void registerPacketListener(ProtocolManager protocolManager) {
         protocolManager.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST, PacketType.Play.Server.MAP_CHUNK) {
             @Override
             public void onPacketSending(PacketEvent event) {
-                debugLog("Intercepting packet send {} to player {}", event.getPacket(), event.getPlayer());
+                final var packet = event.getPacket();
+                debugLog("Intercepting packet send {} to player {}", packet, event.getPlayer());
 
-                final Set<PacketContainer> packets = getPacketsSentInTick(event.getPlayer());
-                packets.add(event.getPacket());
+                final int sentInTick = getPacketsSentInTick(event.getPlayer()).incrementAndGet();
                 final int maxPackets = getMaxPackets();
-                if (packets.size() >= maxPackets) {
+                if (sentInTick > maxPackets) {
                     event.setCancelled(true);
-                    debugLog("Cancelling chunk packet to player {} {}", event.getPlayer(), event.getPacket());
-                    getPacketQueue(event.getPlayer()).add(event.getPacket());
+                    debugLog("Cancelling chunk packet to player {} {}", event.getPlayer(), packet);
+                    getPacketQueue(event.getPlayer()).add(packet);
                 }
             }
         });
-
-        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
-            packetsSentInTick.values().forEach(Collection::clear);
-            packetQueue.forEach((player, queue) -> {
-                int count = 0;
-                var packet = queue.pollFirst();
-                while (packet != null && count < getMaxPackets()) {
-                    try {
-                        debugLog("Resending packet {} to player {}", player, packet);
-                        protocolManager.sendServerPacket(player, packet);
-                        count++;
-                    } catch (InvocationTargetException e) {
-                        e.printStackTrace();
-                    }
-                    packet = queue.pollFirst();
-                }
-                if (count != 0) {
-                    getSLF4JLogger().info("Resent {} packets to {}", count, player.getName());
-                }
-            });
-        }, 0L, 1L);
     }
 
     private int getMaxPackets() {

@@ -10,6 +10,9 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.InvocationTargetException;
@@ -17,7 +20,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class PacketLimiter extends JavaPlugin {
+public final class PacketLimiter extends JavaPlugin implements Listener {
     private static final int DEFAULT_MAX_PACKETS = 15;
     private static final String DEBUG_PREFIX = "[Debug] ";
     private final ConcurrentPlayerMap<Queue<PacketContainer>> packetQueue =
@@ -25,8 +28,11 @@ public final class PacketLimiter extends JavaPlugin {
     private final ConcurrentPlayerMap<AtomicInteger> packetsSentInTick =
             new ConcurrentPlayerMap<>(ConcurrentPlayerMap.PlayerKey.NAME);
 
+    private boolean debugEnabled = false;
+    private int maxPackets = DEFAULT_MAX_PACKETS;
+
     private void debugLog(String format, Object arg1, Object arg2) {
-        if (getConfig().getBoolean("debug")) {
+        if (debugEnabled) {
             var message = DEBUG_PREFIX + format;
             getSLF4JLogger().info(message, arg1, arg2);
         }
@@ -43,6 +49,9 @@ public final class PacketLimiter extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+
+        reloadConfig();
+
         //noinspection ConstantConditions
         getCommand("paperlagreload").setExecutor(new ReloadCommand(this));
 
@@ -54,7 +63,7 @@ public final class PacketLimiter extends JavaPlugin {
                     getPacketsSentInTick(player).set(0); // Reset packet counter for this tick
                     int i;
                     // re-send no more than the maximum packets
-                    for (i = 0; i < getMaxPackets(); i++) {
+                    for (i = 0; i < maxPackets; i++) {
                         final var packet = queue.poll();
                         if (packet == null) {
                             break;
@@ -70,6 +79,26 @@ public final class PacketLimiter extends JavaPlugin {
                         debugLog("Resent {} packets to {}", i, player.getName());
                     }
                 }), 0L, 1L);
+
+        Bukkit.getPluginManager().registerEvents(this, this);
+    }
+
+    @Override
+    public void reloadConfig() {
+        super.reloadConfig();
+
+        var config = getConfig();
+
+        debugEnabled = config.getBoolean("debug");
+
+        var $maxPackets = config.getInt("max-packets-per-tick", DEFAULT_MAX_PACKETS);
+
+        if ($maxPackets < 1) {
+            maxPackets = DEFAULT_MAX_PACKETS;
+            getSLF4JLogger().warn("Illegal value for option `max-packets-per-tick`: {}. Using default value of {}", $maxPackets, DEFAULT_MAX_PACKETS);
+        } else {
+            maxPackets = $maxPackets;
+        }
     }
 
     private void registerPacketListener(ProtocolManager protocolManager) {
@@ -79,7 +108,6 @@ public final class PacketLimiter extends JavaPlugin {
                 final var packet = event.getPacket();
 
                 final int sentInTick = getPacketsSentInTick(event.getPlayer()).incrementAndGet();
-                final int maxPackets = getMaxPackets();
                 if (sentInTick > maxPackets) {
                     event.setCancelled(true);
                     debugLog("Cancelling chunk packet to player {} {}", event.getPlayer(), packet);
@@ -89,7 +117,10 @@ public final class PacketLimiter extends JavaPlugin {
         });
     }
 
-    private int getMaxPackets() {
-        return getConfig().getInt("max-packets-per-tick", DEFAULT_MAX_PACKETS);
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent e) {
+        var player = e.getPlayer();
+        packetQueue.remove(player);
+        packetsSentInTick.remove(player);
     }
 }

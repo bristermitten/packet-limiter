@@ -77,7 +77,6 @@ public final class PacketLimiter extends JavaPlugin {
             @Override
             public void onPacketSending(PacketEvent event) {
                 final var packet = event.getPacket();
-                debugLog("Intercepting packet send {} to player {}", packet, event.getPlayer());
 
                 final int sentInTick = getPacketsSentInTick(event.getPlayer()).incrementAndGet();
                 final int maxPackets = getMaxPackets();

@@ -28,8 +28,11 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
     private final ConcurrentPlayerMap<AtomicInteger> packetsSentInTick =
             new ConcurrentPlayerMap<>(ConcurrentPlayerMap.PlayerKey.NAME);
 
+    private boolean debugEnabled = false;
+    private int maxPackets = DEFAULT_MAX_PACKETS;
+
     private void debugLog(String format, Object arg1, Object arg2) {
-        if (getConfig().getBoolean("debug")) {
+        if (debugEnabled) {
             var message = DEBUG_PREFIX + format;
             getSLF4JLogger().info(message, arg1, arg2);
         }
@@ -46,6 +49,9 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+
+        reloadConfig();
+
         //noinspection ConstantConditions
         getCommand("paperlagreload").setExecutor(new ReloadCommand(this));
 
@@ -57,7 +63,7 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
                     getPacketsSentInTick(player).set(0); // Reset packet counter for this tick
                     int i;
                     // re-send no more than the maximum packets
-                    for (i = 0; i < getMaxPackets(); i++) {
+                    for (i = 0; i < maxPackets; i++) {
                         final var packet = queue.poll();
                         if (packet == null) {
                             break;
@@ -77,6 +83,24 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(this, this);
     }
 
+    @Override
+    public void reloadConfig() {
+        super.reloadConfig();
+
+        var config = getConfig();
+
+        debugEnabled = config.getBoolean("debug");
+
+        var $maxPackets = config.getInt("max-packets-per-tick", DEFAULT_MAX_PACKETS);
+
+        if ($maxPackets < 1) {
+            maxPackets = DEFAULT_MAX_PACKETS;
+            getSLF4JLogger().warn("Illegal value for option `max-packets-per-tick`: {}. Using default value of {}", $maxPackets, DEFAULT_MAX_PACKETS);
+        } else {
+            maxPackets = $maxPackets;
+        }
+    }
+
     private void registerPacketListener(ProtocolManager protocolManager) {
         protocolManager.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST, PacketType.Play.Server.MAP_CHUNK) {
             @Override
@@ -85,7 +109,6 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
                 debugLog("Intercepting packet send {} to player {}", packet, event.getPlayer());
 
                 final int sentInTick = getPacketsSentInTick(event.getPlayer()).incrementAndGet();
-                final int maxPackets = getMaxPackets();
                 if (sentInTick > maxPackets) {
                     event.setCancelled(true);
                     debugLog("Cancelling chunk packet to player {} {}", event.getPlayer(), packet);
@@ -93,10 +116,6 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
                 }
             }
         });
-    }
-
-    private int getMaxPackets() {
-        return getConfig().getInt("max-packets-per-tick", DEFAULT_MAX_PACKETS);
     }
 
     @EventHandler

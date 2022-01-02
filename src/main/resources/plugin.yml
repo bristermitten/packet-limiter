@@ -9,3 +9,7 @@ commands:
       - plreload
     description: Reload config for PaperLagFix
     permission: paperlagfix.reload
+permissions:
+  paperlagfix.reload:
+    description: Access to reload command
+    default: op

@@ -10,6 +10,9 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.lang.reflect.InvocationTargetException;
@@ -17,7 +20,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class PacketLimiter extends JavaPlugin {
+public final class PacketLimiter extends JavaPlugin implements Listener {
     private static final int DEFAULT_MAX_PACKETS = 15;
     private static final String DEBUG_PREFIX = "[Debug] ";
     private final ConcurrentPlayerMap<Queue<PacketContainer>> packetQueue =
@@ -76,6 +79,8 @@ public final class PacketLimiter extends JavaPlugin {
                         debugLog("Resent {} packets to {}", i, player.getName());
                     }
                 }), 0L, 1L);
+
+        Bukkit.getPluginManager().registerEvents(this, this);
     }
 
     @Override
@@ -111,5 +116,12 @@ public final class PacketLimiter extends JavaPlugin {
                 }
             }
         });
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent e) {
+        var player = e.getPlayer();
+        packetQueue.remove(player);
+        packetsSentInTick.remove(player);
     }
 }

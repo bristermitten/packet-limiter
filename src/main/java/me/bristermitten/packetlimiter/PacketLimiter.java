@@ -38,6 +38,13 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
         }
     }
 
+    private void debugLog(String format, Object arg1) {
+        if (debugEnabled) {
+            var message = DEBUG_PREFIX + format;
+            getSLF4JLogger().info(message, arg1);
+        }
+    }
+
     private AtomicInteger getPacketsSentInTick(Player player) {
         return packetsSentInTick.computeIfAbsent(player, p -> new AtomicInteger());
     }
@@ -68,7 +75,7 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
                         if (packet == null) {
                             break;
                         }
-                        debugLog("Resending packet {} to player {}", player, packet);
+                        debugLog("Resending packet {} to player {}", player);
                         try {
                             protocolManager.sendServerPacket(player, packet);
                         } catch (InvocationTargetException e) {
@@ -110,7 +117,7 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
                 final int sentInTick = getPacketsSentInTick(event.getPlayer()).incrementAndGet();
                 if (sentInTick > maxPackets) {
                     event.setCancelled(true);
-                    debugLog("Cancelling chunk packet to player {} {}", event.getPlayer(), packet);
+                    debugLog("Cancelling chunk packet to player {}", event.getPlayer());
                     getPacketQueue(event.getPlayer()).add(packet);
                 }
             }

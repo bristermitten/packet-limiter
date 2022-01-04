@@ -77,7 +77,7 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
                         }
                         debugLog("Resending packet {} to player {}", player);
                         try {
-                            protocolManager.sendServerPacket(player, packet);
+                            protocolManager.sendServerPacket(player, packet, false);
                         } catch (InvocationTargetException e) {
                             e.printStackTrace();
                         }
@@ -98,13 +98,13 @@ public final class PacketLimiter extends JavaPlugin implements Listener {
 
         debugEnabled = config.getBoolean("debug");
 
-        var $maxPackets = config.getInt("max-packets-per-tick", DEFAULT_MAX_PACKETS);
+        var configMaxPackets = config.getInt("max-packets-per-tick", DEFAULT_MAX_PACKETS);
 
-        if ($maxPackets < 1) {
+        if (configMaxPackets < 1) {
             maxPackets = DEFAULT_MAX_PACKETS;
-            getSLF4JLogger().warn("Illegal value for option `max-packets-per-tick`: {}. Using default value of {}", $maxPackets, DEFAULT_MAX_PACKETS);
+            getSLF4JLogger().warn("Illegal value for option `max-packets-per-tick`: {}. Using default value of {}", configMaxPackets, DEFAULT_MAX_PACKETS);
         } else {
-            maxPackets = $maxPackets;
+            maxPackets = configMaxPackets;
         }
     }
 

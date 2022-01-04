@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'me.bristermitten'
-version = '1.2b-SNAPSHOT'
+version = '1.2-SNAPSHOT'
 
 repositories {
     mavenCentral()
